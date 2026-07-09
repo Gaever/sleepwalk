@@ -1,0 +1,15 @@
+[project]
+name = "sleepwalk"
+version = "0.1.0"
+description = "Resume tmux-hosted AI agent sessions after usage limits reset."
+requires-python = ">=3.11"
+dependencies = [
+    "prompt_toolkit>=3.0.52",
+]
+
+[project.scripts]
+sleepwalk = "sleepwalk.cli:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
