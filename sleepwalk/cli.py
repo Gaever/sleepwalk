@@ -15,6 +15,7 @@ from .tmux import capture_pane, list_sessions, send_text
 
 
 RESET_GRACE = timedelta(minutes=2)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -56,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
             print(session.target)
         return 0
     if args.command == "install-systemd":
-        service, timer = install_units(config, Path.cwd())
+        service, timer = install_units(config, PROJECT_ROOT)
         print(f"installed {service}")
         print(f"installed {timer}")
         return 0

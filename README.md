@@ -1,79 +1,47 @@
 # sleepwalk
 
-`sleepwalk` — небольшая CLI-утилита для VPS, где AI-агенты живут в отдельных
-`tmux`-сессиях и иногда останавливаются из-за usage/rate limits.
+Консольная утилита для VPS, где ИИ-агенты работают в отдельных `tmux`-сессиях и
+останавливаются из-за лимитов.
 
-Идея простая: вы один раз выбираете tmux-сессии, за которыми нужно следить, а
-`sleepwalk` периодически смотрит на экран каждой сессии. Если агент стоит на
-экране лимита и время сброса уже подошло, утилита отправляет в эту сессию:
+`sleepwalk` следит за выбранными сессиями. Когда лимит сброшен, он отправляет
+агенту:
 
 ```text
 продолжай
 ```
 
-Это не менеджер агентов и не замена Codex/Claude/других CLI. Это маленький
-watchdog для development sandbox, где хочется оставить несколько агентов
-работать, не возвращаясь вручную к каждому после сброса лимитов.
+## Установка агентом
 
-## Зачем это нужно
-
-На dev VPS часто удобно держать несколько агентов параллельно:
-
-- один чинит backend;
-- другой гоняет frontend-тесты;
-- третий разбирает issue;
-- четвёртый ждёт долгую сборку или лимит провайдера.
-
-Когда CLI-агент упирается в лимит, он обычно остаётся открытым в tmux и пишет
-что-то вроде:
+Скопируйте этот промпт агенту на VPS:
 
 ```text
-Usage limit reached
-You've hit your session limit · resets 10:40pm (Asia/Jakarta)
-Individual quota reached. Resets in 2h47m19s.
+Установи sleepwalk:
+1. Клонируй git@github.com:Gaever/sleepwalk.git в ~/sleepwalk.
+2. Создай виртуальное окружение: python3 -m venv ~/sleepwalk/.venv.
+3. Установи проект: ~/sleepwalk/.venv/bin/pip install -e ~/sleepwalk.
+4. Создай ссылку: ln -sf ~/sleepwalk/.venv/bin/sleepwalk ~/.local/bin/sleepwalk.
+5. Проверь, что команда sleepwalk доступна из любого каталога.
+6. Запусти sleepwalk, дай мне выбрать tmux-сессии.
+7. После выбора выполни sleepwalk install-systemd.
+8. Проверь systemctl --user status sleepwalk.timer.
 ```
 
-`sleepwalk` автоматизирует скучную часть: дождаться reset window и в нужный
-момент отправить короткое продолжение.
-
-## Возможности
-
-- Интерактивный выбор tmux-сессий через удобное inline-меню.
-- Бинарный статус сессии: `limited` или `ok`.
-- Показ оставшегося времени до reset, если его удалось распарсить.
-- Поддержка относительного времени: `Resets in 2h47m19s`.
-- Поддержка абсолютного времени: `resets 10:40pm (Asia/Jakarta)`.
-- Запуск по расписанию через `systemd --user`.
-- Без фонового демона: systemd timer раз в 30 минут запускает один короткий
-  `sleepwalk tick`.
-
-## Требования
-
-- Linux с `tmux`.
-- Python 3.11+.
-- `prompt_toolkit`.
-- `systemd --user`, если нужен автоматический запуск по расписанию.
-
-## Установка
-
-Сейчас проект рассчитан на запуск из checkout-а. Клонируйте репозиторий и
-добавьте launcher в `PATH`:
+## Установка вручную
 
 ```bash
-git clone git@github.com:Gaever/sleepwalk.git
-cd sleepwalk
-ln -sf "$PWD/bin/sleepwalk" ~/.local/bin/sleepwalk
+git clone git@github.com:Gaever/sleepwalk.git ~/sleepwalk
+python3 -m venv ~/sleepwalk/.venv
+~/sleepwalk/.venv/bin/pip install -e ~/sleepwalk
+mkdir -p ~/.local/bin
+ln -sf ~/sleepwalk/.venv/bin/sleepwalk ~/.local/bin/sleepwalk
+sleepwalk
+sleepwalk install-systemd
+systemctl --user status sleepwalk.timer
 ```
 
-После этого команда доступна из любого каталога:
+Если `~/.local/bin` не в `PATH`, добавьте его в настройки командной оболочки.
 
-```bash
-sleepwalk status
-```
-
-## Быстрый старт
-
-Откройте интерактивный выбор сессий:
+## Выбор сессий
 
 ```bash
 sleepwalk
@@ -82,13 +50,11 @@ sleepwalk
 Управление:
 
 - `↑`/`↓` или `j`/`k` — перемещение.
-- `Space` — выбрать или снять выбор с tmux-сессии.
-- `Enter` — перейти к подтверждению.
-- `Enter`/`y` — сохранить выбор.
-- `n` — вернуться из подтверждения.
-- `Esc` или `Ctrl-C`/`Ctrl-Q` — выйти без сохранения.
+- `Space` — выбрать или снять выбор.
+- `Enter` — подтвердить.
+- `Esc` — выйти без сохранения.
 
-Пример экрана:
+Пример:
 
 ```text
 sleepwalk  Space: select  Enter: confirm  Esc: cancel
@@ -99,56 +65,44 @@ sleepwalk  Space: select  Enter: confirm  Esc: cancel
   [x] reelser                  limited    2h06m
 ```
 
-После выбора можно проверить состояние:
+`state`:
 
-```bash
-sleepwalk status
-```
+- `ok` — агент не стоит на лимите.
+- `limited` — агент стоит на лимите.
 
-Пример:
-
-```text
-reelser: limited reset=2h06m
-```
+`reset` — сколько осталось до сброса лимита, если время удалось прочитать.
 
 ## Команды
 
 ```bash
-sleepwalk
-```
-
-Открыть интерактивный выбор tmux-сессий.
-
-```bash
 sleepwalk status
 ```
 
-Показать состояние отслеживаемых сессий.
+Показать состояние выбранных сессий.
 
 ```bash
 sleepwalk tick
 ```
 
-Сделать один проход по отслеживаемым сессиям. Если агент стоит на лимите и
-reset уже близко или не указан явно, `sleepwalk` отправит `продолжай`.
+Проверить выбранные сессии один раз и отправить `продолжай`, если пора.
 
 ```bash
 sleepwalk add <session> [session...]
 ```
 
-Добавить tmux-сессии вручную.
+Добавить сессии вручную.
 
 ```bash
 sleepwalk remove <session> [session...]
 ```
 
-Убрать tmux-сессии из отслеживания.
+Убрать сессии.
 
 ```bash
 sleepwalk list
 ```
 
-Показать список отслеживаемых сессий.
+Показать выбранные сессии.
 
 ```bash
 sleepwalk paths
@@ -160,139 +114,42 @@ sleepwalk paths
 sleepwalk install-systemd
 ```
 
-Установить и включить user-level systemd timer.
+Включить проверку по расписанию.
 
 ```bash
 sleepwalk uninstall-systemd
 ```
 
-Отключить и удалить user-level systemd timer/service.
+Отключить проверку по расписанию.
 
-## Как работает systemd-интеграция
+## Расписание
 
-Команда:
-
-```bash
-sleepwalk install-systemd
-```
-
-создаёт два файла в:
+`sleepwalk install-systemd` создаёт:
 
 ```text
-~/.config/systemd/user/
+~/.config/systemd/user/sleepwalk.service
+~/.config/systemd/user/sleepwalk.timer
 ```
 
-Файлы:
-
-```text
-sleepwalk.service
-sleepwalk.timer
-```
-
-`sleepwalk.service` — это `oneshot`-service. Он не висит постоянно в фоне, а
-просто запускает один проход:
+Таймер запускает:
 
 ```bash
-python3 -m sleepwalk tick
-```
-
-`sleepwalk.timer` запускает этот service:
-
-- через 2 минуты после старта user systemd;
-- затем раз в 30 минут;
-- с `Persistent=true`, чтобы systemd мог догнать пропущенный запуск после
-  простоя пользователя/машины.
-
-После записи unit-файлов `sleepwalk` выполняет:
-
-```bash
-systemctl --user daemon-reload
-systemctl --user enable --now sleepwalk.timer
-```
-
-Проверить timer:
-
-```bash
-systemctl --user status sleepwalk.timer
-systemctl --user list-timers sleepwalk.timer
-```
-
-Посмотреть логи запусков:
-
-```bash
-journalctl --user -u sleepwalk.service
-```
-
-Отключить интеграцию:
-
-```bash
-sleepwalk uninstall-systemd
-```
-
-Эта команда делает `disable --now` для timer, удаляет unit-файлы и запускает
-`systemctl --user daemon-reload`.
-
-## Конфиг и состояние
-
-Конфиг:
-
-```text
-~/.config/sleepwalk/config.toml
-```
-
-Пример:
-
-```toml
-interval_seconds = 1800
-resume_text = "продолжай"
-
-[[sessions]]
-target = "reelser"
-enabled = true
-cooldown_seconds = 1800
-```
-
-State и лог:
-
-```text
-~/.local/state/sleepwalk/state.json
-~/.local/state/sleepwalk/sleepwalk.log
-```
-
-`cooldown_seconds` защищает от повторной отправки `продолжай` в одну и ту же
-сессию слишком часто.
-
-## Как определяется лимит
-
-`sleepwalk` читает последние строки tmux-pane через `tmux capture-pane` и ищет
-типичные сообщения лимитов:
-
-- `usage limit`
-- `Usage limit reached`
-- `You've reached your usage limit. Try again after your limit resets.`
-- `rate limit`
-- `limit reached`
-- `resets in ...`
-- `resets 10:40pm (Asia/Jakarta)`
-- `Individual quota reached`
-
-Если лимит найден, состояние становится `limited`. Всё остальное в публичном
-выводе считается `ok`.
-
-## Безопасность поведения
-
-`sleepwalk` не перезапускает процессы, не закрывает tmux-сессии и не выполняет
-команды внутри shell. Он только отправляет текст `продолжай` в выбранную
-tmux-сессию, когда считает, что агент стоит на лимите.
-
-Перед включением systemd timer удобно вручную проверить:
-
-```bash
-sleepwalk status
 sleepwalk tick
 ```
 
-## Статус проекта
+раз в 30 минут.
 
-Проект родился как личная утилита для VPS-песочницы с несколькими AI-агентами.
-API и формат конфига пока могут меняться.
+Проверить:
+
+```bash
+systemctl --user status sleepwalk.timer
+journalctl --user -u sleepwalk.service
+```
+
+## Файлы
+
+```text
+~/.config/sleepwalk/config.toml
+~/.local/state/sleepwalk/state.json
+~/.local/state/sleepwalk/sleepwalk.log
+```
