@@ -124,7 +124,7 @@ def build_rows(config: Config) -> list[Row]:
     for row in rows:
         try:
             detection = detect(capture_pane(row.target, config.tmux_socket))
-            row.state = "limited" if detection.state == "limited" else "ok"
+            row.state = public_state(detection.state)
             row.reset = format_duration(detection.reset_in)
         except Exception as exc:
             row.state = "error"
@@ -157,3 +157,7 @@ def visible_slice(rows: list[Row], cursor: int) -> list[tuple[int, Row]]:
     max_rows = 12
     start = min(max(0, cursor - max_rows + 1), max(0, len(rows) - max_rows))
     return list(enumerate(rows[start : start + max_rows], start=start))
+
+
+def public_state(state: str) -> str:
+    return "limited" if state == "limited" else "ok"

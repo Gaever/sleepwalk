@@ -79,7 +79,7 @@ def print_status(config: Config) -> int:
         print("No watched sessions. Run `sleepwalk` to choose tmux sessions.")
         return 0
     for target, detection in rows:
-        state = "limited" if detection.state == "limited" else "ok"
+        state = public_state(detection.state)
         print(f"{target}: {state} reset={format_duration(detection.reset_in)}")
     return 0
 
@@ -94,6 +94,14 @@ def inspect_sessions(config: Config) -> list[tuple[str, Detection]]:
         except Exception as exc:
             rows.append((session.target, Detection("missing", str(exc))))
     return rows
+
+
+def public_state(state: str) -> str:
+    if state == "limited":
+        return "limited"
+    if state == "missing":
+        return "missing"
+    return "ok"
 
 
 def tick(config: Config) -> int:
@@ -124,6 +132,10 @@ def tick(config: Config) -> int:
             cooldown_left = timedelta(seconds=session.cooldown_seconds) - (now - last_sent)
         if cooldown_left and cooldown_left.total_seconds() > 0:
             append_log(f"{session.target}: limited, cooldown {format_duration(cooldown_left)}")
+            continue
+
+        if detection.reset_in is None:
+            append_log(f"{session.target}: limited, reset unknown")
             continue
 
         if detection.reset_in and detection.reset_in > RESET_GRACE:

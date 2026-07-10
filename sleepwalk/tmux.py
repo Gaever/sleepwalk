@@ -44,6 +44,5 @@ def capture_pane(target: str, socket: str | None = None, lines: int = 80) -> str
 
 
 def send_text(target: str, text: str, socket: str | None = None) -> None:
-    run_tmux(["send-keys", "-t", target, "Escape"], socket=socket, check=False)
     run_tmux(["send-keys", "-t", target, "-l", text], socket=socket)
     run_tmux(["send-keys", "-t", target, "Enter"], socket=socket)

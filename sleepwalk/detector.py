@@ -16,7 +16,10 @@ LIMIT_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
         r"rate limit",
         r"limit reached",
         r"reached your .*limit",
+        r"hit your .*limit",
+        r"session limit",
         r"resets? (at|in)",
+        r"resets?\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?",
         r"try again (later|after|at)",
         r"5-hour limit",
         r"out of (messages|usage)",
@@ -29,11 +32,8 @@ ACTIVE_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
         r"esc to interrupt",
-        r"\binterrupt\)?",
-        r"\bRunning\b",
-        r"\bThinking\b",
-        r"\btool use\b",
-        r"\bWorking\b",
+        r"ctrl\+?c to interrupt",
+        r"\binterrupt\)",
         r"\b\d+\s+background terminals?\b",
     )
 )
@@ -51,13 +51,13 @@ def detect(text: str) -> Detection:
     relevant = "\n".join(line for line in text.splitlines()[-80:] if line.strip())
     pane_hash = hashlib.sha256(relevant.encode("utf-8", errors="ignore")).hexdigest()
 
-    limit_match = first_match(LIMIT_PATTERNS, relevant)
-    if limit_match:
-        return Detection("limited", limit_match.group(0), parse_reset_delta(relevant), pane_hash)
-
     active_match = first_match(ACTIVE_PATTERNS, relevant)
     if active_match:
         return Detection("active", active_match.group(0), None, pane_hash)
+
+    limit_match = first_match(LIMIT_PATTERNS, relevant)
+    if limit_match:
+        return Detection("limited", limit_match.group(0), parse_reset_delta(relevant), pane_hash)
 
     return Detection("idle", None, parse_reset_delta(relevant), pane_hash)
 
