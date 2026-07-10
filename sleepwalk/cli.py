@@ -23,6 +23,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("status")
     sub.add_parser("tick")
+    sub.add_parser("run-scheduled")
     add_parser = sub.add_parser("add")
     add_parser.add_argument("targets", nargs="+")
     remove_parser = sub.add_parser("remove")
@@ -40,7 +41,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "status":
         return print_status(config)
     if args.command == "tick":
-        return tick(config)
+        return tick(config, scheduled=False)
+    if args.command == "run-scheduled":
+        return tick(config, scheduled=True)
     if args.command == "add":
         targets = sorted({*(session.target for session in config.sessions), *args.targets})
         save_config(with_sessions(config, targets))
@@ -104,7 +107,7 @@ def public_state(state: str) -> str:
     return "ok"
 
 
-def tick(config: Config) -> int:
+def tick(config: Config, scheduled: bool) -> int:
     state = load_state()
     changed = False
     watched = [session for session in config.sessions if session.enabled]
@@ -134,11 +137,11 @@ def tick(config: Config) -> int:
             append_log(f"{session.target}: limited, cooldown {format_duration(cooldown_left)}")
             continue
 
-        if detection.reset_in is None:
+        if scheduled and detection.reset_in is None:
             append_log(f"{session.target}: limited, reset unknown")
             continue
 
-        if detection.reset_in and detection.reset_in > RESET_GRACE:
+        if scheduled and detection.reset_in and detection.reset_in > RESET_GRACE:
             append_log(f"{session.target}: limited, reset in {format_duration(detection.reset_in)}")
             continue
 
