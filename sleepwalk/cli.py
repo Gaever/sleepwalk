@@ -124,24 +124,31 @@ def tick(config: Config, scheduled: bool) -> int:
             append_log(f"{session.target}: missing: {exc}")
             continue
 
+        session_state = state.setdefault(session.target, SessionState())
         if detection.state != "limited":
+            if session_state.expected_reset_at is not None:
+                session_state.expected_reset_at = None
+                changed = True
             append_log(f"{session.target}: {detection.state}")
             continue
 
-        session_state = state.setdefault(session.target, SessionState())
         last_sent = parse_dt(session_state.last_resume_sent_at)
+        expected_reset = parse_dt(session_state.expected_reset_at)
+        reset_due = expected_reset is not None and expected_reset <= now + RESET_GRACE
         cooldown_left = None
         if last_sent:
             cooldown_left = timedelta(seconds=session.cooldown_seconds) - (now - last_sent)
-        if cooldown_left and cooldown_left.total_seconds() > 0:
+        if scheduled and cooldown_left and cooldown_left.total_seconds() > 0:
             append_log(f"{session.target}: limited, cooldown {format_duration(cooldown_left)}")
             continue
 
-        if scheduled and detection.reset_in is None:
+        if scheduled and not reset_due and detection.reset_in is None:
             append_log(f"{session.target}: limited, reset unknown")
             continue
 
-        if scheduled and detection.reset_in and detection.reset_in > RESET_GRACE:
+        if scheduled and not reset_due and detection.reset_in and detection.reset_in > RESET_GRACE:
+            session_state.expected_reset_at = (now + detection.reset_in).isoformat()
+            changed = True
             append_log(f"{session.target}: limited, reset in {format_duration(detection.reset_in)}")
             continue
 
@@ -150,6 +157,7 @@ def tick(config: Config, scheduled: bool) -> int:
         send_text(session.target, config.resume_text, config.tmux_socket)
         session_state.last_resume_sent_at = now.isoformat()
         session_state.last_limited_hash = detection.pane_hash
+        session_state.expected_reset_at = None
         changed = True
 
     if changed:

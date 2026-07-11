@@ -12,6 +12,7 @@ from .paths import log_path, state_path
 class SessionState:
     last_resume_sent_at: str | None = None
     last_limited_hash: str | None = None
+    expected_reset_at: str | None = None
 
 
 def utcnow() -> datetime:

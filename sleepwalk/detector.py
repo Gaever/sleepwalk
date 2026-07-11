@@ -7,6 +7,9 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
+RECENT_RESET_WINDOW = timedelta(hours=1)
+
+
 LIMIT_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
@@ -117,6 +120,9 @@ def parse_absolute_reset(text: str, now: datetime | None = None) -> timedelta | 
         current = now.astimezone(tz) if now else datetime.now(tz)
         reset_at = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
         if reset_at < current:
+            elapsed = current - reset_at
+            if elapsed <= RECENT_RESET_WINDOW:
+                return timedelta(0)
             reset_at += timedelta(days=1)
         return reset_at - current
     return None
