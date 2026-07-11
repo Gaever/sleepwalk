@@ -2,19 +2,17 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import timedelta
 from pathlib import Path
 
 from .config import Config, load_config, save_config, with_sessions
 from .detector import Detection, detect, format_duration
 from .interactive import run_wizard
 from .paths import config_path, log_path
-from .state import SessionState, append_log, load_state, parse_dt, save_state, utcnow
+from .state import append_log
 from .systemd import install_units, uninstall_units
 from .tmux import capture_pane, list_sessions, send_text
 
 
-RESET_GRACE = timedelta(minutes=2)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -41,9 +39,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "status":
         return print_status(config)
     if args.command == "tick":
-        return tick(config, scheduled=False)
+        return tick(config)
     if args.command == "run-scheduled":
-        return tick(config, scheduled=True)
+        return tick(config)
     if args.command == "add":
         targets = sorted({*(session.target for session in config.sessions), *args.targets})
         save_config(with_sessions(config, targets))
@@ -107,15 +105,12 @@ def public_state(state: str) -> str:
     return "ok"
 
 
-def tick(config: Config, scheduled: bool) -> int:
-    state = load_state()
-    changed = False
+def tick(config: Config) -> int:
     watched = [session for session in config.sessions if session.enabled]
     if not watched:
         append_log("no watched sessions")
         return 0
 
-    now = utcnow()
     for session in watched:
         try:
             text = capture_pane(session.target, config.tmux_socket)
@@ -124,44 +119,13 @@ def tick(config: Config, scheduled: bool) -> int:
             append_log(f"{session.target}: missing: {exc}")
             continue
 
-        session_state = state.setdefault(session.target, SessionState())
         if detection.state != "limited":
-            if session_state.expected_reset_at is not None:
-                session_state.expected_reset_at = None
-                changed = True
             append_log(f"{session.target}: {detection.state}")
-            continue
-
-        last_sent = parse_dt(session_state.last_resume_sent_at)
-        expected_reset = parse_dt(session_state.expected_reset_at)
-        reset_due = expected_reset is not None and expected_reset <= now + RESET_GRACE
-        cooldown_left = None
-        if last_sent:
-            cooldown_left = timedelta(seconds=session.cooldown_seconds) - (now - last_sent)
-        if scheduled and cooldown_left and cooldown_left.total_seconds() > 0:
-            append_log(f"{session.target}: limited, cooldown {format_duration(cooldown_left)}")
-            continue
-
-        if scheduled and not reset_due and detection.reset_in is None:
-            append_log(f"{session.target}: limited, reset unknown")
-            continue
-
-        if scheduled and not reset_due and detection.reset_in and detection.reset_in > RESET_GRACE:
-            session_state.expected_reset_at = (now + detection.reset_in).isoformat()
-            changed = True
-            append_log(f"{session.target}: limited, reset in {format_duration(detection.reset_in)}")
             continue
 
         append_log(f"{session.target}: limited, sent resume")
         print(f"{session.target}: sent `{config.resume_text}`")
         send_text(session.target, config.resume_text, config.tmux_socket)
-        session_state.last_resume_sent_at = now.isoformat()
-        session_state.last_limited_hash = detection.pane_hash
-        session_state.expected_reset_at = None
-        changed = True
-
-    if changed:
-        save_state(state)
     return 0
 
 
